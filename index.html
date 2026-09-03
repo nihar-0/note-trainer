@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Staff Trainer</title>
+<title>Stave Trainer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vexflow/3.0.9/vexflow-min.js"></script>
 <style>
   :root{
@@ -33,7 +33,7 @@
     min-height:100vh; padding: 28px 16px;
   }
   .app{
-    width:100%; max-width: 620px;
+    width:100%; max-width: 660px;
   }
   header{
     display:flex; align-items:center; justify-content:space-between;
@@ -66,27 +66,27 @@
 
   .panel{
     background: var(--paper);
-    border-radius: 3px;
+    border-radius: 4px;
     border: 1px solid #d8d0ba;
     box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 40px -20px rgba(0,0,0,0.6);
-    padding: 24px 20px 18px;
+    padding: 26px 24px 20px;
     position: relative;
     transition: box-shadow 250ms ease, border-color 250ms ease;
   }
   #staff-wrap{
     display:flex; justify-content:center;
-    min-height: 290px;
+    min-height: 315px;
   }
   #staff-wrap svg text{ fill: var(--ink); }
 
   .readout{
     display:flex; justify-content:space-between; align-items:center;
-    margin-top: 6px;
-    padding: 0 6px;
-    font-size: 12.5px;
+    margin-top: 8px;
+    padding: 0 8px;
+    font-size: 13px;
     color: var(--ink-soft);
     font-variant-numeric: tabular-nums;
-    min-height: 18px;
+    min-height: 20px;
   }
   .readout .status{
     font-weight: 600;
@@ -179,7 +179,7 @@
     background: var(--bg-raised);
     border: 1px solid var(--hairline);
     border-radius: 6px;
-    width: 100%; max-width: 400px;
+    width: 100%; max-width: 410px;
     padding: 22px 22px 18px;
   }
   .modal h2{
@@ -330,7 +330,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>Staff Trainer</h1>
+      <h1>Stave Trainer</h1>
       <div class="header-right">
         <div class="streak">streak <b id="streak">0</b></div>
         <button class="icon-btn" id="settingsBtn" aria-label="Settings" aria-haspopup="dialog">
@@ -401,6 +401,13 @@
       <details class="advanced-settings">
         <summary>Advanced settings</summary>
         <div class="advanced-settings-content">
+          <div class="field">
+            <label class="duration-check" style="margin-bottom:0;">
+              <input type="checkbox" id="showPitchReadout">
+              <span style="color:var(--text); font-weight:500;">Show detected pitch &amp; frequency</span>
+            </label>
+          </div>
+
           <div class="field">
             <label>Pitch tolerance <span class="val" id="toleranceVal">50 cents</span></label>
             <input type="range" id="toleranceSlider" min="15" max="100" step="5" value="50">
@@ -502,7 +509,8 @@
     holdMs: 60,
     graceMs: 140,
     includeAccidentals: false,
-    durations: ['q']
+    durations: ['q'],
+    showPitchReadout: false // off by default
   };
 
   const DURATION_BEATS = { 'q': 1, 'h': 2, 'w': 4 };
@@ -512,48 +520,49 @@
 
   const wrap = document.getElementById('staff-wrap');
 
+  // Fallback standalone SVG renderer when VexFlow is blocked
   function drawPureSvgStaff(midi, clef, duration, preferFlat){
     wrap.innerHTML = '';
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("width", "380");
-    svg.setAttribute("height", "290");
-    svg.setAttribute("viewBox", "0 0 380 290");
+    svg.setAttribute("width", "430");
+    svg.setAttribute("height", "315");
+    svg.setAttribute("viewBox", "0 0 430 315");
 
     const tY = 40;
-    const bY = 160;
-    const spacing = 10;
+    const bY = 175;
+    const spacing = 11;
 
     for(let i=0; i<5; i++){
       const l = document.createElementNS(svgNS, 'line');
-      l.setAttribute('x1', 40); l.setAttribute('x2', 340);
+      l.setAttribute('x1', 45); l.setAttribute('x2', 385);
       l.setAttribute('y1', tY + i*spacing); l.setAttribute('y2', tY + i*spacing);
-      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.2');
+      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.3');
       svg.appendChild(l);
     }
     for(let i=0; i<5; i++){
       const l = document.createElementNS(svgNS, 'line');
-      l.setAttribute('x1', 40); l.setAttribute('x2', 340);
+      l.setAttribute('x1', 45); l.setAttribute('x2', 385);
       l.setAttribute('y1', bY + i*spacing); l.setAttribute('y2', bY + i*spacing);
-      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.2');
+      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.3');
       svg.appendChild(l);
     }
 
     const leftBar = document.createElementNS(svgNS, 'line');
-    leftBar.setAttribute('x1', 40); leftBar.setAttribute('x2', 40);
-    leftBar.setAttribute('y1', tY); leftBar.setAttribute('y2', bY + 40);
-    leftBar.setAttribute('stroke', '#2A2E35'); leftBar.setAttribute('stroke-width', '2');
+    leftBar.setAttribute('x1', 45); leftBar.setAttribute('x2', 45);
+    leftBar.setAttribute('y1', tY); leftBar.setAttribute('y2', bY + 44);
+    leftBar.setAttribute('stroke', '#2A2E35'); leftBar.setAttribute('stroke-width', '2.2');
     svg.appendChild(leftBar);
 
     const tClef = document.createElementNS(svgNS, 'text');
-    tClef.setAttribute('x', 50); tClef.setAttribute('y', tY + 28);
-    tClef.setAttribute('font-size', '28'); tClef.setAttribute('font-family', 'Georgia, serif');
+    tClef.setAttribute('x', 55); tClef.setAttribute('y', tY + 31);
+    tClef.setAttribute('font-size', '32'); tClef.setAttribute('font-family', 'Georgia, serif');
     tClef.setAttribute('fill', '#2A2E35'); tClef.textContent = '𝄞';
     svg.appendChild(tClef);
 
     const bClef = document.createElementNS(svgNS, 'text');
-    bClef.setAttribute('x', 50); bClef.setAttribute('y', bY + 25);
-    bClef.setAttribute('font-size', '24'); bClef.setAttribute('font-family', 'Georgia, serif');
+    bClef.setAttribute('x', 55); bClef.setAttribute('y', bY + 28);
+    bClef.setAttribute('font-size', '27'); bClef.setAttribute('font-family', 'Georgia, serif');
     bClef.setAttribute('fill', '#2A2E35'); bClef.textContent = '𝄢';
     svg.appendChild(bClef);
 
@@ -562,26 +571,26 @@
     const isTreble = clef === 'treble';
     const baseDia = isTreble ? TREBLE_BOTTOM_DIA : BASS_BOTTOM_DIA;
     const topDia  = isTreble ? TREBLE_TOP_DIA : BASS_TOP_DIA;
-    const baseLineY = (isTreble ? tY : bY) + 40;
+    const baseLineY = (isTreble ? tY : bY) + 44;
     const noteY = baseLineY - (dia - baseDia) * (spacing / 2);
-    const noteX = 190;
+    const noteX = 220;
 
     if (dia > topDia) {
       for (let l = topDia + 2; l <= dia; l += 2) {
         const ly = baseLineY - (l - baseDia) * (spacing / 2);
         const ledger = document.createElementNS(svgNS, 'line');
-        ledger.setAttribute('x1', noteX - 12); ledger.setAttribute('x2', noteX + 12);
+        ledger.setAttribute('x1', noteX - 14); ledger.setAttribute('x2', noteX + 14);
         ledger.setAttribute('y1', ly); ledger.setAttribute('y2', ly);
-        ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.3');
+        ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.4');
         svg.appendChild(ledger);
       }
     } else if (dia < baseDia) {
       for (let l = baseDia - 2; l >= dia; l -= 2) {
         const ly = baseLineY - (l - baseDia) * (spacing / 2);
         const ledger = document.createElementNS(svgNS, 'line');
-        ledger.setAttribute('x1', noteX - 12); ledger.setAttribute('x2', noteX + 12);
+        ledger.setAttribute('x1', noteX - 14); ledger.setAttribute('x2', noteX + 14);
         ledger.setAttribute('y1', ly); ledger.setAttribute('y2', ly);
-        ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.3');
+        ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.4');
         svg.appendChild(ledger);
       }
     }
@@ -591,14 +600,14 @@
 
     const head = document.createElementNS(svgNS, 'ellipse');
     head.setAttribute('cx', noteX); head.setAttribute('cy', noteY);
-    head.setAttribute('rx', 6.5); head.setAttribute('ry', 4.8);
+    head.setAttribute('rx', 7.5); head.setAttribute('ry', 5.5);
     head.setAttribute('transform', `rotate(-20 ${noteX} ${noteY})`);
     if(duration === 'w'){
       head.setAttribute('fill', 'none'); head.setAttribute('stroke', '#2A2E35');
-      head.setAttribute('stroke-width', '2.2');
+      head.setAttribute('stroke-width', '2.4');
     } else if(duration === 'h'){
       head.setAttribute('fill', 'none'); head.setAttribute('stroke', '#2A2E35');
-      head.setAttribute('stroke-width', '2');
+      head.setAttribute('stroke-width', '2.2');
     } else {
       head.setAttribute('fill', '#2A2E35');
     }
@@ -607,20 +616,20 @@
     if(duration !== 'w'){
       const stem = document.createElementNS(svgNS, 'line');
       const stemUp = dia < (baseDia + 4);
-      const sx = stemUp ? noteX + 5.5 : noteX - 5.5;
+      const sx = stemUp ? noteX + 6.5 : noteX - 6.5;
       const sy1 = noteY;
-      const sy2 = stemUp ? noteY - 32 : noteY + 32;
+      const sy2 = stemUp ? noteY - 35 : noteY + 35;
       stem.setAttribute('x1', sx); stem.setAttribute('x2', sx);
       stem.setAttribute('y1', sy1); stem.setAttribute('y2', sy2);
-      stem.setAttribute('stroke', '#2A2E35'); stem.setAttribute('stroke-width', '1.4');
+      stem.setAttribute('stroke', '#2A2E35'); stem.setAttribute('stroke-width', '1.6');
       noteGroup.appendChild(stem);
     }
 
     if(sp.acc){
       const acc = document.createElementNS(svgNS, 'text');
-      acc.setAttribute('x', noteX - 18);
-      acc.setAttribute('y', noteY + 5);
-      acc.setAttribute('font-size', '18');
+      acc.setAttribute('x', noteX - 21);
+      acc.setAttribute('y', noteY + 6);
+      acc.setAttribute('font-size', '20');
       acc.setAttribute('font-family', 'Georgia, serif');
       acc.setAttribute('fill', '#2A2E35');
       acc.textContent = sp.acc === '#' ? '♯' : '♭';
@@ -631,6 +640,7 @@
     wrap.appendChild(svg);
   }
 
+  // Slightly larger VexFlow Grand Staff
   function drawGrandStaff(midi, clef, duration = 'q', preferFlat = false){
     if(!VF){
       drawPureSvgStaff(midi, clef, duration, preferFlat);
@@ -640,13 +650,15 @@
     try {
       wrap.innerHTML = '';
       const renderer = new VF.Renderer(wrap, VF.Renderer.Backends.SVG);
-      renderer.resize(380, 290);
+      // Increased from 380x290 to 430x315
+      renderer.resize(430, 315);
       const context = renderer.getContext();
-      context.setFont('Georgia', 10);
+      context.setFont('Georgia', 11);
 
-      const staveTreble = new VF.Stave(50, 25, 290);
+      // Width expanded from 290 to 340
+      const staveTreble = new VF.Stave(45, 25, 340);
       staveTreble.addClef('treble');
-      const staveBass = new VF.Stave(50, 150, 290);
+      const staveBass = new VF.Stave(45, 160, 340);
       staveBass.addClef('bass');
 
       const brace = new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.BRACE);
@@ -674,14 +686,14 @@
       const beats = DURATION_BEATS[duration] || 1;
       const noteVoice = new VF.Voice({ num_beats: beats, beat_value: 4 }).setStrict(false);
       noteVoice.addTickables([note]);
-      new VF.Formatter().joinVoices([noteVoice]).format([noteVoice], 210);
+      new VF.Formatter().joinVoices([noteVoice]).format([noteVoice], 250);
       noteVoice.draw(context, targetStave);
 
       const restDuration = duration + 'r';
       const rest = new VF.StaveNote({ clef: restStave === staveTreble ? 'treble' : 'bass', keys: [restKey], duration: restDuration });
       const restVoice = new VF.Voice({ num_beats: beats, beat_value: 4 }).setStrict(false);
       restVoice.addTickables([rest]);
-      new VF.Formatter().joinVoices([restVoice]).format([restVoice], 210);
+      new VF.Formatter().joinVoices([restVoice]).format([restVoice], 250);
       restVoice.draw(context, restStave);
     } catch(e) {
       drawPureSvgStaff(midi, clef, duration, preferFlat);
@@ -779,7 +791,6 @@
   let incorrectStartTime = null;
   let lastDetectedMidi = null;
 
-  // --- Optimized Normalized Pitch Engine (Tuned for iPad Safari) ---
   function detectPitch(buffer, sampleRate) {
     const SIZE = buffer.length;
     let sumSquares = 0;
@@ -788,10 +799,8 @@
     }
     const rms = Math.sqrt(sumSquares / SIZE);
     
-    // Lower silence floor to account for Apple AGC clamping
     if (rms < 0.003) return null;
 
-    // Pitch search range: 60 Hz to 1200 Hz
     const minPeriod = Math.floor(sampleRate / 1200);
     const maxPeriod = Math.min(Math.floor(sampleRate / 60), Math.floor(SIZE / 2));
 
@@ -813,7 +822,6 @@
       cmnd[tau] = (runningSum > 0) ? (diff[tau] * tau) / runningSum : 1;
     }
 
-    // Relaxed threshold (0.35) so iPad microphone overtones don't cause false rejections
     const threshold = 0.35;
     let tauEstimate = -1;
     for (let tau = minPeriod; tau < maxPeriod; tau++) {
@@ -872,6 +880,10 @@
       incorrectStartTime = null;
       lastDetectedMidi = null;
 
+      if(settings.showPitchReadout){
+        detectedEl.textContent = '\u00A0';
+      }
+
       if(matchStartTime !== null && lastGoodTime !== null &&
          (now - lastGoodTime) > settings.graceMs){
         matchStartTime = null;
@@ -886,7 +898,12 @@
       const detMidi = freqToMidi(freq);
       const detRounded = Math.round(detMidi);
       
-      detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
+      // Only display frequency and note if the setting is checked
+      if(settings.showPitchReadout){
+        detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
+      } else {
+        detectedEl.textContent = '\u00A0';
+      }
 
       if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.5){
         incorrectStartTime = null;
@@ -962,7 +979,6 @@
     }
 
     try{
-      // Explicit WebKit & iOS constraints: Bypass speech processing / DSP filters
       const webkitAudioConstraints = {
         audio: {
           echoCancellation: { ideal: false },
@@ -974,7 +990,6 @@
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia(webkitAudioConstraints);
       } catch(e) {
-        // Fallback if specific WebKit keys are rejected
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
     } catch(err){
@@ -992,21 +1007,18 @@
 
     audioCtx = new AudioContextClass();
     
-    // Explicitly un-pause suspended context on iOS
     if (audioCtx.state === 'suspended') {
       await audioCtx.resume();
     }
 
     const source = audioCtx.createMediaStreamSource(mediaStream);
     
-    // Add software Pre-Amp Gain to compensate for iOS mic dampening
     gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(3.0, audioCtx.currentTime); // 3x digital pre-amp
+    gainNode.gain.setValueAtTime(3.0, audioCtx.currentTime);
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 4096;
 
-    // Pipe stream: Source -> PreAmp -> Analyser
     source.connect(gainNode);
     gainNode.connect(analyser);
 
@@ -1062,12 +1074,20 @@
   const holdVal = document.getElementById('holdVal');
   const graceSlider = document.getElementById('graceSlider');
   const graceVal = document.getElementById('graceVal');
+  const showPitchReadout = document.getElementById('showPitchReadout');
   const durationWarning = document.getElementById('durationWarning');
   const durCheckboxes = [
     document.getElementById('durCrotchet'),
     document.getElementById('durMinim'),
     document.getElementById('durSemibreve')
   ];
+
+  showPitchReadout.addEventListener('change', (e)=>{
+    settings.showPitchReadout = e.target.checked;
+    if(!settings.showPitchReadout){
+      document.getElementById('detected').textContent = '\u00A0';
+    }
+  });
 
   function updateDurationsFromCheckboxes(e){
     const checked = durCheckboxes.filter(cb => cb.checked);
@@ -1142,6 +1162,10 @@
     settings.toleranceCents = 50;
     settings.holdMs = 60;
     settings.graceMs = 140;
+    settings.showPitchReadout = false;
+    showPitchReadout.checked = false;
+    document.getElementById('detected').textContent = '\u00A0';
+
     toleranceSlider.value = settings.toleranceCents;
     holdSlider.value = settings.holdMs;
     graceSlider.value = settings.graceMs;
