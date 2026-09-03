@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Staff Trainer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vexflow/3.0.9/vexflow-min.js"></script>
+<style>
+  :root{
+    --bg: #1B1E23;
+    --bg-raised: #23272E;
+    --hairline: #33383F;
+    --paper: #ECE6D6;
+    --ink: #2A2E35;
+    --ink-soft: #565B52;
+    --text: #EDEAE3;
+    --text-muted: #9AA0AC;
+    --brass: #C9A227;
+    --brass-dim: #8a7220;
+    --clay: #B5533C;
+    --correct-green: #22c55e;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body{
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding: 28px 16px;
+  }
+  .app{
+    width:100%; max-width: 620px;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 22px;
+  }
+  h1{
+    font-family: Georgia, serif;
+    font-weight:500;
+    font-size: 28px;
+    letter-spacing: 0.2px;
+    margin:0;
+  }
+  .header-right{
+    display:flex; align-items:center; gap:16px;
+  }
+  .streak{
+    font-size: 13px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .streak b{ color: var(--brass); font-weight:600; }
+
+  .icon-btn{
+    background:none; border:none; padding:4px; cursor:pointer;
+    color: var(--text-muted); line-height:0;
+    border-radius: 4px;
+  }
+  .icon-btn:hover{ color: var(--text); }
+  .icon-btn:focus-visible{ outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  .panel{
+    background: var(--paper);
+    border-radius: 3px;
+    border: 1px solid #d8d0ba;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 40px -20px rgba(0,0,0,0.6);
+    padding: 24px 20px 18px;
+    position: relative;
+    transition: box-shadow 250ms ease, border-color 250ms ease;
+  }
+  #staff-wrap{
+    display:flex; justify-content:center;
+    min-height: 290px;
+  }
+  #staff-wrap svg text{ fill: var(--ink); }
+
+  .readout{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top: 6px;
+    padding: 0 6px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+    min-height: 18px;
+  }
+  .readout .status{
+    font-weight: 600;
+    color: var(--ink);
+    transition: color 150ms ease;
+  }
+  .readout .status.match{ color: #16a34a; }
+
+  .controls{
+    margin-top: 22px;
+    display:flex; flex-direction:column; gap: 16px;
+  }
+  .row{
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 14px;
+  }
+  
+  .toggle-btn{
+    background: none;
+    border: 1px solid var(--hairline);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 150ms ease;
+  }
+  .toggle-btn:hover{
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+  .toggle-btn.active{
+    background: rgba(201, 162, 39, 0.12);
+    border-color: var(--brass);
+    color: var(--brass);
+  }
+  .toggle-indicator{
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--hairline);
+    transition: background 150ms ease;
+  }
+  .toggle-btn.active .toggle-indicator{
+    background: var(--brass);
+  }
+
+  .start-btn{
+    font-weight:600; font-size: 14px;
+    background: var(--brass); color: #1B1E23; border:none;
+    padding: 10px 22px; border-radius: 999px; cursor:pointer;
+    display:flex; align-items:center; gap:8px;
+  }
+  .start-btn.listening{
+    background: transparent; color: var(--text);
+    border: 1px solid var(--hairline);
+  }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--clay);
+  }
+  .start-btn.listening .dot{
+    background: #e0463f;
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:0.45; transform:scale(0.8); }
+  }
+
+  .hint{
+    font-size: 12.5px; color: var(--text-muted); line-height:1.5;
+    border-top: 1px solid var(--hairline); padding-top: 14px;
+  }
+  .error{
+    color: #e0847a; font-size: 13px; margin-top: 6px; display:none;
+  }
+
+  /* Modal */
+  .modal-backdrop{
+    position:fixed; inset:0; background: rgba(10,11,13,0.6);
+    display:none; align-items:center; justify-content:center;
+    padding: 20px; z-index: 10;
+  }
+  .modal-backdrop.open{ display:flex; }
+  .modal{
+    background: var(--bg-raised);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    width: 100%; max-width: 400px;
+    padding: 22px 22px 18px;
+  }
+  .modal h2{
+    font-family: Georgia, serif; font-weight:500; font-size:19px;
+    margin: 0 0 18px;
+  }
+  .field{ margin-bottom: 18px; }
+  .field label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size: 13px; color: var(--text-muted); margin-bottom:8px;
+  }
+  .field label span.val{ color: var(--text); font-variant-numeric: tabular-nums; }
+  .range-selects{ display:flex; align-items:center; gap:10px; }
+  .range-selects select{
+    flex:1; background: var(--bg); color: var(--text);
+    border: 1px solid var(--hairline); border-radius: 4px;
+    padding: 8px 10px; font-size: 14px;
+  }
+  .range-selects .to{ color: var(--text-muted); font-size:13px; }
+  input[type="range"]{
+    width: 100%; accent-color: var(--brass);
+  }
+
+  .durations-group{
+    display:flex; flex-direction:column; gap:8px;
+    background: var(--bg);
+    border: 1px solid var(--hairline);
+    border-radius: 5px;
+    padding: 10px 12px;
+  }
+  .duration-check{
+    display:flex; align-items:center; gap:9px;
+    cursor:pointer; font-size: 13px; color: var(--text);
+    user-select:none;
+  }
+  .duration-check input[type="checkbox"]{
+    margin:0; width: 16px; height: 16px;
+    accent-color: var(--brass); cursor:pointer;
+  }
+  .duration-check span.sub{
+    color: var(--text-muted); font-size: 12px;
+  }
+  .duration-warning{
+    font-size:12px; color:#e0847a; margin-top:6px; display:none;
+  }
+
+  .modal-actions{
+    display:flex; justify-content:flex-end; margin-top: 6px;
+  }
+  .modal-actions button{
+    font-weight:600; font-size: 14px;
+    background: var(--brass); color: #1B1E23; border:none;
+    padding: 9px 20px; border-radius: 999px; cursor:pointer;
+  }
+  .range-warning{
+    font-size:12px; color:#e0847a; margin-top:-8px; margin-bottom:14px; display:none;
+  }
+  .advanced-settings{
+    border:1px solid var(--hairline);
+    border-radius:5px;
+    margin-top:2px;
+    overflow:hidden;
+  }
+  .advanced-settings summary{
+    cursor:pointer;
+    padding:10px 12px;
+    font-size:13px;
+    color:var(--text-muted);
+    user-select:none;
+  }
+  .advanced-settings summary:hover{ color:var(--text); }
+  .advanced-settings[open] summary{
+    border-bottom:1px solid var(--hairline);
+    color:var(--text);
+  }
+  .advanced-settings-content{
+    padding:14px 12px 0;
+  }
+  .reset-btn{
+    background:none;
+    border:1px solid var(--hairline);
+    color:var(--text-muted);
+    padding:8px 13px;
+    border-radius:999px;
+    cursor:pointer;
+    font-size:12px;
+  }
+  .reset-btn:hover{ color:var(--text); border-color:var(--text-muted); }
+  .modal-actions{
+    align-items:center;
+    gap:10px;
+  }
+  .modal-actions .reset-btn{ margin-right:auto; }
+
+  @keyframes staffErrorFlash{
+    0%,100%{ box-shadow:0 0 0 0 transparent; }
+    25%,75%{ box-shadow:0 0 0 3px #e0463f; }
+    50%{ box-shadow:0 0 0 5px rgba(224,70,63,0.35); }
+  }
+  .panel.error-flash{
+    animation:staffErrorFlash 360ms ease-out;
+  }
+
+  @keyframes panelSuccessFlash {
+    0% {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.4), 0 18px 40px -20px rgba(0,0,0,0.6);
+    }
+    70% {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25), 0 18px 40px -20px rgba(0,0,0,0.6);
+    }
+    100% {
+      border-color: #d8d0ba;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 40px -20px rgba(0,0,0,0.6);
+    }
+  }
+
+  .panel.correct-flash {
+    animation: panelSuccessFlash 750ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  }
+
+  @keyframes correctPop {
+    0% { transform: scale(1); }
+    20% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  .note-correct {
+    fill: var(--correct-green) !important;
+    stroke: var(--correct-green) !important;
+    filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.85)) drop-shadow(0 0 2px rgba(34, 197, 94, 1));
+    transform-origin: center center;
+    animation: correctPop 500ms ease-out forwards;
+  }
+
+  #rangePreviewWrap{
+    background: var(--paper); border-radius: 3px; border: 1px solid #d8d0ba;
+    margin-top: 10px; display:flex; justify-content:center; cursor: pointer;
+    user-select: none;
+  }
+  #rangePreviewWrap svg text{ fill: var(--ink); }
+  .preview-hint{
+    font-size: 11.5px; color: var(--text-muted); margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Staff Trainer</h1>
+      <div class="header-right">
+        <div class="streak">streak <b id="streak">0</b></div>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings" aria-haspopup="dialog">
+          <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M10 2.5v2.1M10 15.4v2.1M17.5 10h-2.1M4.6 10H2.5M15.1 4.9l-1.5 1.5M6.4 13.6l-1.5 1.5M15.1 15.1l-1.5-1.5M6.4 6.4L4.9 4.9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="panel" id="panel">
+      <div id="staff-wrap"></div>
+      <div class="readout">
+        <span id="detected">&nbsp;</span>
+        <span class="status" id="status">Press start and play or sing the note</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <button class="toggle-btn" id="accidentalsBtn">
+          <span class="toggle-indicator"></span>
+          <span>Sharps &amp; flats (&sharp; / &flat;)</span>
+        </button>
+        <button class="start-btn" id="startBtn"><span class="dot"></span><span id="startLabel">Start</span></button>
+      </div>
+      <div class="error" id="error"></div>
+      <div class="hint" id="hintText">The grand staff always displays both clefs; the target note appears on whichever one it belongs to. Everything runs locally in this page.</div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h2 id="modalTitle">Settings</h2>
+
+      <div class="field">
+        <label>Note range</label>
+        <div class="range-selects">
+          <select id="lowSelect"></select>
+          <span class="to">to</span>
+          <select id="highSelect"></select>
+        </div>
+        <div id="rangePreviewWrap"></div>
+        <div class="preview-hint">Click the staff to move whichever end is closer.</div>
+      </div>
+      <div class="range-warning" id="rangeWarning">Lowest note must be below the highest note.</div>
+
+      <div class="field">
+        <label>Note appearances</label>
+        <div class="durations-group" id="durationsGroup">
+          <label class="duration-check">
+            <input type="checkbox" value="q" id="durCrotchet" checked>
+            <span>Crotchet <span class="sub">(quarter note)</span></span>
+          </label>
+          <label class="duration-check">
+            <input type="checkbox" value="h" id="durMinim">
+            <span>Minim <span class="sub">(half note)</span></span>
+          </label>
+          <label class="duration-check">
+            <input type="checkbox" value="w" id="durSemibreve">
+            <span>Semibreve <span class="sub">(whole note)</span></span>
+          </label>
+        </div>
+        <div class="duration-warning" id="durationWarning">At least one note appearance must remain selected.</div>
+      </div>
+
+      <details class="advanced-settings">
+        <summary>Advanced settings</summary>
+        <div class="advanced-settings-content">
+          <div class="field">
+            <label>Pitch tolerance <span class="val" id="toleranceVal">50 cents</span></label>
+            <input type="range" id="toleranceSlider" min="15" max="100" step="5" value="50">
+          </div>
+
+          <div class="field">
+            <label>Hold time <span class="val" id="holdVal">60 ms</span></label>
+            <input type="range" id="holdSlider" min="10" max="900" step="5" value="60">
+          </div>
+
+          <div class="field" style="margin-bottom:0;">
+            <label>Dropout grace <span class="val" id="graceVal">120 ms</span></label>
+            <input type="range" id="graceSlider" min="0" max="400" step="20" value="120">
+          </div>
+
+          <div class="modal-actions">
+            <button class="reset-btn" id="resetAdvanced">Reset to default</button>
+          </div>
+        </div>
+      </details>
+
+      <div class="modal-actions">
+        <button id="modalDone">Done</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const hasVF = typeof Vex !== 'undefined' && Vex.Flow;
+  const VF = hasVF ? Vex.Flow : null;
+
+  const NATURAL_SEMITONES = [0,2,4,5,7,9,11];
+  const MIDDLE_C = 60;
+
+  function isNatural(midi){ return NATURAL_SEMITONES.includes(((midi%12)+12)%12); }
+
+  function getNotesInRange(lo, hi, allowAccidentals){
+    const out = [];
+    for(let m=lo; m<=hi; m++){
+      if(allowAccidentals || isNatural(m)) out.push(m);
+    }
+    return out;
+  }
+
+  const SPELLINGS = {
+    0:  [{ letter: 'c', acc: '' }],
+    1:  [{ letter: 'c', acc: '#' }, { letter: 'd', acc: 'b' }],
+    2:  [{ letter: 'd', acc: '' }],
+    3:  [{ letter: 'd', acc: '#' }, { letter: 'e', acc: 'b' }],
+    4:  [{ letter: 'e', acc: '' }],
+    5:  [{ letter: 'f', acc: '' }],
+    6:  [{ letter: 'f', acc: '#' }, { letter: 'g', acc: 'b' }],
+    7:  [{ letter: 'g', acc: '' }],
+    8:  [{ letter: 'g', acc: '#' }, { letter: 'a', acc: 'b' }],
+    9:  [{ letter: 'a', acc: '' }],
+    10: [{ letter: 'a', acc: '#' }, { letter: 'b', acc: 'b' }],
+    11: [{ letter: 'b', acc: '' }]
+  };
+
+  function midiToSpelling(midi, preferFlat = false){
+    const semi = ((midi % 12) + 12) % 12;
+    const octave = Math.floor(midi / 12) - 1;
+    const opts = SPELLINGS[semi];
+    const choice = (opts.length > 1 && preferFlat) ? opts[1] : opts[0];
+    return {
+      letter: choice.letter,
+      acc: choice.acc,
+      octave: octave
+    };
+  }
+
+  function midiToName(midi, preferFlat = false){
+    const s = midiToSpelling(midi, preferFlat);
+    return s.letter.toUpperCase() + (s.acc ? (s.acc === '#' ? '♯' : '♭') : '') + s.octave;
+  }
+
+  function clefForMidi(midi){ return midi >= MIDDLE_C ? 'treble' : 'bass'; }
+
+  const LETTER_STEP = {c:0, d:1, e:2, f:3, g:4, a:5, b:6, C:0, D:1, E:2, F:3, G:4, A:5, B:6};
+  const STEP_LETTER = ['C','D','E','F','G','A','B'];
+  const LETTER_SEMITONE = {C:0, D:2, E:4, F:5, G:7, A:9, B:11};
+
+  function diatonicIndexFromSpelling(letter, octave){
+    return octave * 7 + LETTER_STEP[letter];
+  }
+
+  function diatonicIndexToMidi(dia){
+    const octave = Math.floor(dia / 7);
+    const letter = STEP_LETTER[((dia % 7) + 7) % 7];
+    return (octave + 1) * 12 + LETTER_SEMITONE[letter];
+  }
+
+  const TREBLE_BOTTOM_DIA = diatonicIndexFromSpelling('e', 4);
+  const TREBLE_TOP_DIA    = diatonicIndexFromSpelling('f', 5);
+  const BASS_BOTTOM_DIA   = diatonicIndexFromSpelling('g', 2);
+  const BASS_TOP_DIA      = diatonicIndexFromSpelling('a', 3);
+
+  const settings = {
+    lowMidi: 43,
+    highMidi: 81,
+    toleranceCents: 50,
+    holdMs: 60,
+    graceMs: 120,
+    includeAccidentals: false,
+    durations: ['q']
+  };
+
+  const DURATION_BEATS = { 'q': 1, 'h': 2, 'w': 4 };
+  const SILENCE_RMS = 0.018;
+  const MIN_PITCH_CONFIDENCE = 0.72;
+  const INCORRECT_HOLD_MS = 90;
+  const CORRECT_HOLD_MS = 60;
+  const ADVANCE_DELAY_MS = 750;
+
+  const wrap = document.getElementById('staff-wrap');
+
+  // Fallback standalone SVG renderer when VexFlow CDN is blocked (e.g. Files app preview)
+  function drawPureSvgStaff(midi, clef, duration, preferFlat){
+    wrap.innerHTML = '';
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", "380");
+    svg.setAttribute("height", "290");
+    svg.setAttribute("viewBox", "0 0 380 290");
+
+    const tY = 40;
+    const bY = 160;
+    const spacing = 10;
+
+    // Draw treble staff lines
+    for(let i=0; i<5; i++){
+      const l = document.createElementNS(svgNS, 'line');
+      l.setAttribute('x1', 40); l.setAttribute('x2', 340);
+      l.setAttribute('y1', tY + i*spacing); l.setAttribute('y2', tY + i*spacing);
+      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.2');
+      svg.appendChild(l);
+    }
+    // Draw bass staff lines
+    for(let i=0; i<5; i++){
+      const l = document.createElementNS(svgNS, 'line');
+      l.setAttribute('x1', 40); l.setAttribute('x2', 340);
+      l.setAttribute('y1', bY + i*spacing); l.setAttribute('y2', bY + i*spacing);
+      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.2');
+      svg.appendChild(l);
+    }
+
+    // Connectors
+    const leftBar = document.createElementNS(svgNS, 'line');
+    leftBar.setAttribute('x1', 40); leftBar.setAttribute('x2', 40);
+    leftBar.setAttribute('y1', tY); leftBar.setAttribute('y2', bY + 40);
+    leftBar.setAttribute('stroke', '#2A2E35'); leftBar.setAttribute('stroke-width', '2');
+    svg.appendChild(leftBar);
+
+    // Clef Text Markers
+    const tClef = document.createElementNS(svgNS, 'text');
+    tClef.setAttribute('x', 50); tClef.setAttribute('y', tY + 28);
+    tClef.setAttribute('font-size', '28'); tClef.setAttribute('font-family', 'Georgia, serif');
+    tClef.setAttribute('fill', '#2A2E35'); tClef.textContent = '𝄞';
+    svg.appendChild(tClef);
+
+    const bClef = document.createElementNS(svgNS, 'text');
+    bClef.setAttribute('x', 50); bClef.setAttribute('y', bY + 25);
+    bClef.setAttribute('font-size', '24'); bClef.setAttribute('font-family', 'Georgia, serif');
+    bClef.setAttribute('fill', '#2A2E35'); bClef.textContent = '𝄢';
+    svg.appendChild(bClef);
+
+    // Note placement calculation
+    const sp = midiToSpelling(midi, preferFlat);
+    const dia = diatonicIndexFromSpelling(sp.letter, sp.octave);
+    const isTreble = clef === 'treble';
+    const baseDia = isTreble ? TREBLE_BOTTOM_DIA : BASS_BOTTOM_DIA;
+    const topDia  = isTreble ? TREBLE_TOP_DIA : BASS_TOP_DIA;
+    const baseLineY = (isTreble ? tY : bY) + 40; // bottom line (line 4)
+    const noteY = baseLineY - (dia - baseDia) * (spacing / 2);
+    const noteX = 190;
+
+    // Ledger lines
+    if (dia > topDia) {
+      for (let l = topDia + 2; l <= dia; l += 2) {
+        const ly = baseLineY - (l - baseDia) * (spacing / 2);
+        const ledger = document.createElementNS(svgNS, 'line');
+        ledger.setAttribute('x1', noteX - 12); ledger.setAttribute('x2', noteX + 12);
+        ledger.setAttribute('y1', ly); ledger.setAttribute('y2', ly);
+        ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.3');
+        svg.appendChild(ledger);
+      }
+    } else if (dia < baseDia) {
+      for (let l = baseDia - 2; l >= dia; l -= 2) {
+        const ly = baseLineY - (l - baseDia) * (spacing / 2);
+        const ledger = document.createElementNS(svgNS, 'line');
+        ledger.setAttribute('x1', noteX - 12); ledger.setAttribute('x2', noteX + 12);
+        ledger.setAttribute('y1', ly); ledger.setAttribute('y2', ly);
+        ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.3');
+        svg.appendChild(ledger);
+      }
+    }
+
+    const noteGroup = document.createElementNS(svgNS, 'g');
+    noteGroup.setAttribute('id', 'target-note');
+
+    // Notehead
+    const head = document.createElementNS(svgNS, 'ellipse');
+    head.setAttribute('cx', noteX); head.setAttribute('cy', noteY);
+    head.setAttribute('rx', 6.5); head.setAttribute('ry', 4.8);
+    head.setAttribute('transform', `rotate(-20 ${noteX} ${noteY})`);
+    if(duration === 'w'){
+      head.setAttribute('fill', 'none'); head.setAttribute('stroke', '#2A2E35');
+      head.setAttribute('stroke-width', '2.2');
+    } else if(duration === 'h'){
+      head.setAttribute('fill', 'none'); head.setAttribute('stroke', '#2A2E35');
+      head.setAttribute('stroke-width', '2');
+    } else {
+      head.setAttribute('fill', '#2A2E35');
+    }
+    noteGroup.appendChild(head);
+
+    // Stem
+    if(duration !== 'w'){
+      const stem = document.createElementNS(svgNS, 'line');
+      const stemUp = dia < (baseDia + 4);
+      const sx = stemUp ? noteX + 5.5 : noteX - 5.5;
+      const sy1 = noteY;
+      const sy2 = stemUp ? noteY - 32 : noteY + 32;
+      stem.setAttribute('x1', sx); stem.setAttribute('x2', sx);
+      stem.setAttribute('y1', sy1); stem.setAttribute('y2', sy2);
+      stem.setAttribute('stroke', '#2A2E35'); stem.setAttribute('stroke-width', '1.4');
+      noteGroup.appendChild(stem);
+    }
+
+    // Accidental
+    if(sp.acc){
+      const acc = document.createElementNS(svgNS, 'text');
+      acc.setAttribute('x', noteX - 18);
+      acc.setAttribute('y', noteY + 5);
+      acc.setAttribute('font-size', '18');
+      acc.setAttribute('font-family', 'Georgia, serif');
+      acc.setAttribute('fill', '#2A2E35');
+      acc.textContent = sp.acc === '#' ? '♯' : '♭';
+      noteGroup.appendChild(acc);
+    }
+
+    svg.appendChild(noteGroup);
+    wrap.appendChild(svg);
+  }
+
+  function drawGrandStaff(midi, clef, duration = 'q', preferFlat = false){
+    if(!VF){
+      drawPureSvgStaff(midi, clef, duration, preferFlat);
+      return;
+    }
+
+    try {
+      wrap.innerHTML = '';
+      const renderer = new VF.Renderer(wrap, VF.Renderer.Backends.SVG);
+      renderer.resize(380, 290);
+      const context = renderer.getContext();
+      context.setFont('Georgia', 10);
+
+      const staveTreble = new VF.Stave(50, 25, 290);
+      staveTreble.addClef('treble');
+      const staveBass = new VF.Stave(50, 150, 290);
+      staveBass.addClef('bass');
+
+      const brace = new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.BRACE);
+      const lineLeft = new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.SINGLE_LEFT);
+      const lineRight = new VF.StaveConnector(staveTreble, staveBass).setType(VF.StaveConnector.type.SINGLE_RIGHT);
+
+      staveTreble.setContext(context).draw();
+      staveBass.setContext(context).draw();
+      brace.setContext(context).draw();
+      lineLeft.setContext(context).draw();
+      lineRight.setContext(context).draw();
+
+      const targetStave = clef === 'treble' ? staveTreble : staveBass;
+      const restStave = clef === 'treble' ? staveBass : staveTreble;
+      const restKey = clef === 'treble' ? 'd/3' : 'b/4';
+
+      const sp = midiToSpelling(midi, preferFlat);
+      const vexKey = `${sp.letter}/${sp.octave}`;
+      const note = new VF.StaveNote({ clef, keys: [vexKey], duration: duration });
+      if(sp.acc){
+        note.addAccidental(0, new VF.Accidental(sp.acc));
+      }
+      note.setAttribute('id', 'target-note');
+
+      const beats = DURATION_BEATS[duration] || 1;
+      const noteVoice = new VF.Voice({ num_beats: beats, beat_value: 4 }).setStrict(false);
+      noteVoice.addTickables([note]);
+      new VF.Formatter().joinVoices([noteVoice]).format([noteVoice], 210);
+      noteVoice.draw(context, targetStave);
+
+      const restDuration = duration + 'r';
+      const rest = new VF.StaveNote({ clef: restStave === staveTreble ? 'treble' : 'bass', keys: [restKey], duration: restDuration });
+      const restVoice = new VF.Voice({ num_beats: beats, beat_value: 4 }).setStrict(false);
+      restVoice.addTickables([rest]);
+      new VF.Formatter().joinVoices([restVoice]).format([restVoice], 210);
+      restVoice.draw(context, restStave);
+    } catch(e) {
+      drawPureSvgStaff(midi, clef, duration, preferFlat);
+    }
+  }
+
+  let currentMidi = null;
+  let currentClef = 'treble';
+  let currentDuration = 'q';
+  let currentPreferFlat = false;
+  let streak = 0;
+  let isAdvancing = false;
+  let errorFlashTimeout = null;
+
+  function clearCorrectFeedback(){
+    const panel = document.getElementById('panel');
+    panel.classList.remove('correct-flash');
+    const svg = wrap.querySelector('svg');
+    if(svg) {
+      svg.querySelectorAll('.note-correct').forEach(el => el.classList.remove('note-correct'));
+    }
+  }
+
+  function showCorrectFeedback(){
+    const panel = document.getElementById('panel');
+    panel.classList.remove('correct-flash');
+    void panel.offsetWidth;
+    panel.classList.add('correct-flash');
+
+    const svg = wrap.querySelector('svg');
+    if(!svg) return;
+    const noteEl = svg.querySelector('#target-note');
+    if(noteEl) {
+      noteEl.querySelectorAll('path, rect, ellipse, line').forEach(el => el.classList.add('note-correct'));
+      noteEl.classList.add('note-correct');
+    }
+  }
+
+  function flashError(){
+    const panel = document.getElementById('panel');
+    panel.classList.remove('error-flash');
+    void panel.offsetWidth;
+    panel.classList.add('error-flash');
+    if(errorFlashTimeout) clearTimeout(errorFlashTimeout);
+    errorFlashTimeout = setTimeout(() => panel.classList.remove('error-flash'), 400);
+  }
+
+  function buildPool(){
+    let notes = getNotesInRange(settings.lowMidi, settings.highMidi, settings.includeAccidentals);
+    if(notes.length === 0) notes = [MIDDLE_C];
+    return notes;
+  }
+
+  function nextNote(){
+    const pool = buildPool();
+    let next;
+    if(pool.length > 1){
+      do {
+        next = pool[Math.floor(Math.random()*pool.length)];
+      } while(next === currentMidi);
+    } else {
+      next = pool[0];
+    }
+    currentMidi = next;
+    currentClef = clefForMidi(currentMidi);
+    currentPreferFlat = Math.random() > 0.5;
+
+    const durations = settings.durations.length > 0 ? settings.durations : ['q'];
+    currentDuration = durations[Math.floor(Math.random() * durations.length)];
+
+    drawGrandStaff(currentMidi, currentClef, currentDuration, currentPreferFlat);
+    clearCorrectFeedback();
+    setStatus(listening ? 'Listening…' : 'Press start and play or sing the note', false);
+  }
+
+  function setStatus(text, matched){
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.classList.toggle('match', !!matched);
+  }
+
+  const accidentalsBtn = document.getElementById('accidentalsBtn');
+  accidentalsBtn.addEventListener('click', ()=>{
+    settings.includeAccidentals = !settings.includeAccidentals;
+    accidentalsBtn.classList.toggle('active', settings.includeAccidentals);
+    populateNoteSelects();
+    renderRangePreview();
+    nextNote();
+  });
+
+  let audioCtx, analyser, mediaStream, rafId;
+  let listening = false;
+  let matchStartTime = null;
+  let lastGoodTime = null;
+  let incorrectStartTime = null;
+  let lastDetectedMidi = null;
+
+  function autoCorrelate(buf, sampleRate){
+    const SIZE = buf.length;
+    let rms = 0;
+    for(let i=0;i<SIZE;i++){ rms += buf[i]*buf[i]; }
+    rms = Math.sqrt(rms/SIZE);
+    if(rms < SILENCE_RMS) return -1;
+
+    let r1 = 0, r2 = SIZE-1;
+    const thres = 0.2;
+    for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i]) < thres){ r1 = i; break; } }
+    for(let i=1;i<SIZE/2;i++){ if(Math.abs(buf[SIZE-i]) < thres){ r2 = SIZE-i; break; } }
+    const trimmed = buf.slice(r1, r2);
+    const n = trimmed.length;
+    if(n < 8) return -1;
+
+    const c = new Float32Array(n);
+    for(let i=0;i<n;i++){
+      let sum = 0;
+      for(let j=0;j<n-i;j++){ sum += trimmed[j]*trimmed[j+i]; }
+      c[i] = sum;
+    }
+
+    let d = 0;
+    while(d < n-1 && c[d] > c[d+1]) d++;
+
+    let maxVal = -1, maxPos = -1;
+    for(let i=d;i<n;i++){ if(c[i] > maxVal){ maxVal = c[i]; maxPos = i; } }
+    let T0 = maxPos;
+    if(T0 <= 0) return -1;
+
+    if(T0 > 0 && T0 < n-1){
+      const x1 = c[T0-1], x2 = c[T0], x3 = c[T0+1];
+      const a = (x1 + x3 - 2*x2) / 2;
+      const b = (x3 - x1) / 2;
+      if(a !== 0) T0 = T0 - b/(2*a);
+    }
+    if(T0 <= 0) return -1;
+
+    const confidence = c[T0] / (c[0] || 1);
+    if(confidence < MIN_PITCH_CONFIDENCE) return -1;
+
+    return { freq: sampleRate / T0, confidence };
+  }
+
+  function freqToMidi(f){ return 69 + 12*Math.log2(f/440); }
+
+  function pollPitch(){
+    if(!listening) return;
+
+    if(isAdvancing){
+      rafId = requestAnimationFrame(pollPitch);
+      return;
+    }
+
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    const result = autoCorrelate(buf, audioCtx.sampleRate);
+    const detectedEl = document.getElementById('detected');
+    const now = performance.now();
+
+    if(result === -1){
+      detectedEl.textContent = '\u00A0';
+      incorrectStartTime = null;
+      lastDetectedMidi = null;
+
+      if(matchStartTime !== null && lastGoodTime !== null &&
+         (now - lastGoodTime) > settings.graceMs){
+        matchStartTime = null;
+      }
+
+      if(listening) {
+        setStatus(matchStartTime !== null ? 'Matched — hold…' : 'Listening…',
+                  matchStartTime !== null);
+      }
+    } else {
+      const freq = result.freq;
+      const detMidi = freqToMidi(freq);
+      const detRounded = Math.round(detMidi);
+      detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
+
+      if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.35){
+        incorrectStartTime = null;
+      }
+      lastDetectedMidi = detMidi;
+
+      const diff = (detMidi - currentMidi) * 100;
+      const inTune = Math.abs(diff) <= settings.toleranceCents;
+
+      if(inTune){
+        incorrectStartTime = null;
+        if(matchStartTime === null) matchStartTime = now;
+        lastGoodTime = now;
+        setStatus('Matched — hold…', true);
+
+        if(now - matchStartTime >= Math.max(CORRECT_HOLD_MS, settings.holdMs)){
+          onCorrect();
+          return;
+        }
+      } else {
+        if(incorrectStartTime === null) incorrectStartTime = now;
+        matchStartTime = null;
+        lastGoodTime = null;
+
+        if(now - incorrectStartTime >= INCORRECT_HOLD_MS){
+          if(streak !== 0){
+            streak = 0;
+            document.getElementById('streak').textContent = '0';
+          }
+          flashError();
+          incorrectStartTime = now;
+          setStatus('Incorrect', false);
+        } else {
+          setStatus('Listening…', false);
+        }
+      }
+    }
+
+    if(listening) rafId = requestAnimationFrame(pollPitch);
+  }
+
+  function onCorrect(){
+    isAdvancing = true;
+    streak += 1;
+    document.getElementById('streak').textContent = streak;
+    
+    showCorrectFeedback();
+    setStatus('Correct!', true);
+    matchStartTime = null;
+    lastGoodTime = null;
+    incorrectStartTime = null;
+    lastDetectedMidi = null;
+
+    setTimeout(()=>{
+      if(listening){
+        nextNote();
+        isAdvancing = false;
+        rafId = requestAnimationFrame(pollPitch);
+      } else {
+        isAdvancing = false;
+      }
+    }, ADVANCE_DELAY_MS);
+  }
+
+  async function startListening(){
+    const errEl = document.getElementById('error');
+    errEl.style.display = 'none';
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      errEl.textContent = 'Microphone access is not supported in this preview. Open in Safari or via HTTP/HTTPS.';
+      errEl.style.display = 'block';
+      return false;
+    }
+
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false
+      }});
+    } catch(err){
+      errEl.textContent = 'Could not access the microphone: ' + err.message;
+      errEl.style.display = 'block';
+      return false;
+    }
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if(!AudioContextClass){
+      errEl.textContent = 'AudioContext is not supported in this preview environment.';
+      errEl.style.display = 'block';
+      return false;
+    }
+
+    audioCtx = new AudioContextClass();
+    const source = audioCtx.createMediaStreamSource(mediaStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    listening = true;
+    isAdvancing = false;
+    matchStartTime = null; lastGoodTime = null;
+    incorrectStartTime = null; lastDetectedMidi = null;
+    setStatus('Listening…', false);
+    rafId = requestAnimationFrame(pollPitch);
+    return true;
+  }
+
+  function stopListening(){
+    listening = false;
+    isAdvancing = false;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+    if(audioCtx) audioCtx.close();
+    document.getElementById('detected').textContent = '\u00A0';
+    setStatus('Stopped', false);
+    clearCorrectFeedback();
+    incorrectStartTime = null;
+    lastDetectedMidi = null;
+  }
+
+  const startBtn = document.getElementById('startBtn');
+  const startLabel = document.getElementById('startLabel');
+  startBtn.addEventListener('click', async ()=>{
+    if(!listening){
+      startBtn.disabled = true;
+      const ok = await startListening();
+      startBtn.disabled = false;
+      if(ok){
+        startBtn.classList.add('listening');
+        startLabel.textContent = 'Stop';
+      }
+    } else {
+      stopListening();
+      startBtn.classList.remove('listening');
+      startLabel.textContent = 'Start';
+    }
+  });
+
+  const modalBackdrop = document.getElementById('modalBackdrop');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const modalDone = document.getElementById('modalDone');
+  const lowSelect = document.getElementById('lowSelect');
+  const highSelect = document.getElementById('highSelect');
+  const rangeWarning = document.getElementById('rangeWarning');
+  const toleranceSlider = document.getElementById('toleranceSlider');
+  const toleranceVal = document.getElementById('toleranceVal');
+  const holdSlider = document.getElementById('holdSlider');
+  const holdVal = document.getElementById('holdVal');
+  const graceSlider = document.getElementById('graceSlider');
+  const graceVal = document.getElementById('graceVal');
+  const durationWarning = document.getElementById('durationWarning');
+  const durCheckboxes = [
+    document.getElementById('durCrotchet'),
+    document.getElementById('durMinim'),
+    document.getElementById('durSemibreve')
+  ];
+
+  function updateDurationsFromCheckboxes(e){
+    const checked = durCheckboxes.filter(cb => cb.checked);
+    if(checked.length === 0){
+      if(e && e.target){
+        e.target.checked = true;
+      }
+      durationWarning.style.display = 'block';
+      setTimeout(()=>{ durationWarning.style.display = 'none'; }, 2400);
+      return;
+    }
+    durationWarning.style.display = 'none';
+    settings.durations = checked.map(cb => cb.value);
+  }
+
+  durCheckboxes.forEach(cb => {
+    cb.addEventListener('change', updateDurationsFromCheckboxes);
+  });
+
+  const SELECT_MIN = 36;
+  const SELECT_MAX = 93;
+
+  function populateNoteSelects(){
+    const curLow = settings.lowMidi;
+    const curHigh = settings.highMidi;
+    [lowSelect, highSelect].forEach(sel => {
+      sel.innerHTML = '';
+      getNotesInRange(SELECT_MIN, SELECT_MAX, settings.includeAccidentals).forEach(m=>{
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = midiToName(m);
+        sel.appendChild(opt);
+      });
+    });
+    lowSelect.value = curLow;
+    highSelect.value = curHigh;
+  }
+
+  function setRange(lo, hi, { fromClick = false } = {}){
+    if(lo >= hi){
+      if(fromClick){ [lo, hi] = [hi, lo]; }
+      else { rangeWarning.style.display = 'block'; return; }
+    }
+    rangeWarning.style.display = 'none';
+    settings.lowMidi = lo;
+    settings.highMidi = hi;
+    lowSelect.value = lo;
+    highSelect.value = hi;
+    renderRangePreview();
+    nextNote();
+  }
+  lowSelect.addEventListener('change', ()=> setRange(parseInt(lowSelect.value,10), parseInt(highSelect.value,10)));
+  highSelect.addEventListener('change', ()=> setRange(parseInt(lowSelect.value,10), parseInt(highSelect.value,10)));
+
+  toleranceSlider.addEventListener('input', ()=>{
+    settings.toleranceCents = parseInt(toleranceSlider.value, 10);
+    toleranceVal.textContent = `${settings.toleranceCents} cents`;
+  });
+  function formatHold(ms){ return ms < 1000 ? `${ms} ms` : `${(ms/1000).toFixed(2)} s`; }
+  holdSlider.addEventListener('input', ()=>{
+    settings.holdMs = parseInt(holdSlider.value, 10);
+    holdVal.textContent = formatHold(settings.holdMs);
+  });
+  holdVal.textContent = formatHold(settings.holdMs);
+  graceSlider.addEventListener('input', ()=>{
+    settings.graceMs = parseInt(graceSlider.value, 10);
+    graceVal.textContent = `${settings.graceMs} ms`;
+  });
+
+  const resetAdvanced = document.getElementById('resetAdvanced');
+  function resetAdvancedSettings(){
+    settings.toleranceCents = 50;
+    settings.holdMs = 60;
+    settings.graceMs = 120;
+    toleranceSlider.value = settings.toleranceCents;
+    holdSlider.value = settings.holdMs;
+    graceSlider.value = settings.graceMs;
+    toleranceVal.textContent = `${settings.toleranceCents} cents`;
+    holdVal.textContent = formatHold(settings.holdMs);
+    graceVal.textContent = `${settings.graceMs} ms`;
+    matchStartTime = null;
+    lastGoodTime = null;
+  }
+  resetAdvanced.addEventListener('click', resetAdvancedSettings);
+
+  // Range preview (pure SVG for total reliability)
+  const previewWrap = document.getElementById('rangePreviewWrap');
+  const PREVIEW_SPACING = 10;
+
+  function renderRangePreview(){
+    previewWrap.innerHTML = '';
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", "340");
+    svg.setAttribute("height", "240");
+    svg.setAttribute("viewBox", "0 0 340 240");
+
+    const tY = 30;
+    const bY = 135;
+    const spacing = PREVIEW_SPACING;
+
+    // Treble lines
+    for(let i=0; i<5; i++){
+      const l = document.createElementNS(svgNS, 'line');
+      l.setAttribute('x1', 40); l.setAttribute('x2', 300);
+      l.setAttribute('y1', tY + i*spacing); l.setAttribute('y2', tY + i*spacing);
+      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.1');
+      svg.appendChild(l);
+    }
+    // Bass lines
+    for(let i=0; i<5; i++){
+      const l = document.createElementNS(svgNS, 'line');
+      l.setAttribute('x1', 40); l.setAttribute('x2', 300);
+      l.setAttribute('y1', bY + i*spacing); l.setAttribute('y2', bY + i*spacing);
+      l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.1');
+      svg.appendChild(l);
+    }
+
+    // Connectors
+    const bar = document.createElementNS(svgNS, 'line');
+    bar.setAttribute('x1', 40); bar.setAttribute('x2', 40);
+    bar.setAttribute('y1', tY); bar.setAttribute('y2', bY + 40);
+    bar.setAttribute('stroke', '#2A2E35'); bar.setAttribute('stroke-width', '2');
+    svg.appendChild(bar);
+
+    const markerX = 250;
+    function staveFor(midi){ return midi >= MIDDLE_C ? 'treble' : 'bass'; }
+    function baseDiaFor(midi){ return midi >= MIDDLE_C ? TREBLE_BOTTOM_DIA : BASS_BOTTOM_DIA; }
+    function topDiaFor(midi){ return midi >= MIDDLE_C ? TREBLE_TOP_DIA : BASS_TOP_DIA; }
+
+    function getDiatonicY(midi){
+      const isTreble = staveFor(midi) === 'treble';
+      const sp = midiToSpelling(midi);
+      const dia = diatonicIndexFromSpelling(sp.letter, sp.octave);
+      const baseDia = baseDiaFor(midi);
+      const baseLineY = (isTreble ? tY : bY) + 40;
+      return baseLineY - (dia - baseDia) * (spacing / 2);
+    }
+
+    function drawMarker(midi, color, labelBelow){
+      const sp = midiToSpelling(midi);
+      const dia = diatonicIndexFromSpelling(sp.letter, sp.octave);
+      const baseDia = baseDiaFor(midi);
+      const topDia = topDiaFor(midi);
+      const isTreble = staveFor(midi) === 'treble';
+      const baseLineY = (isTreble ? tY : bY) + 40;
+      const y = getDiatonicY(midi);
+
+      if (dia > topDia) {
+        for (let l = topDia + 2; l <= dia; l += 2) {
+          const ly = baseLineY - (l - baseDia) * (spacing / 2);
+          const ledger = document.createElementNS(svgNS,'line');
+          ledger.setAttribute('x1', markerX - 10); ledger.setAttribute('x2', markerX + 10);
+          ledger.setAttribute('y1', ly); ledger.setAttribute('y2', ly);
+          ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.3');
+          svg.appendChild(ledger);
+        }
+      } else if (dia < baseDia) {
+        for (let l = baseDia - 2; l >= dia; l -= 2) {
+          const ly = baseLineY - (l - baseDia) * (spacing / 2);
+          const ledger = document.createElementNS(svgNS,'line');
+          ledger.setAttribute('x1', markerX - 10); ledger.setAttribute('x2', markerX + 10);
+          ledger.setAttribute('y1', ly); ledger.setAttribute('y2', ly);
+          ledger.setAttribute('stroke', '#2A2E35'); ledger.setAttribute('stroke-width', '1.3');
+          svg.appendChild(ledger);
+        }
+      }
+
+      const head = document.createElementNS(svgNS,'ellipse');
+      head.setAttribute('cx', markerX); head.setAttribute('cy', y);
+      head.setAttribute('rx', 6); head.setAttribute('ry', 4.5);
+      head.setAttribute('fill', color);
+      svg.appendChild(head);
+
+      const label = document.createElementNS(svgNS,'text');
+      label.setAttribute('x', markerX);
+      label.setAttribute('y', y + (labelBelow ? 16 : -9));
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-size', '11');
+      label.setAttribute('font-weight', '600');
+      label.setAttribute('fill', color);
+      label.textContent = midiToName(midi);
+      svg.appendChild(label);
+
+      return y;
+    }
+
+    const yLow = drawMarker(settings.lowMidi, '#8a7220', true);
+    const yHigh = drawMarker(settings.highMidi, '#B5533C', false);
+
+    const bracket = document.createElementNS(svgNS,'line');
+    bracket.setAttribute('x1', markerX + 14); bracket.setAttribute('x2', markerX + 14);
+    bracket.setAttribute('y1', Math.min(yLow, yHigh)); bracket.setAttribute('y2', Math.max(yLow, yHigh));
+    bracket.setAttribute('stroke', '#C9A227'); bracket.setAttribute('stroke-width', '1.5');
+    bracket.setAttribute('stroke-dasharray', '2,3');
+    svg.insertBefore(bracket, svg.firstChild);
+
+    svg.addEventListener('click', (e)=>{
+      const rect = svg.getBoundingClientRect();
+      const scale = 240 / rect.height;
+      const clickY = (e.clientY - rect.top) * scale;
+
+      const divider = (tY + 40 + bY) / 2;
+      const useTreble = clickY < divider;
+      const baseDia = useTreble ? TREBLE_BOTTOM_DIA : BASS_BOTTOM_DIA;
+      const baseLineY = (useTreble ? tY : bY) + 40;
+      const rawStep = Math.round((baseLineY - clickY) / (spacing / 2));
+      let midi = diatonicIndexToMidi(baseDia + rawStep);
+      midi = Math.max(SELECT_MIN, Math.min(SELECT_MAX, midi));
+
+      const distToLow = Math.abs(midi - settings.lowMidi);
+      const distToHigh = Math.abs(midi - settings.highMidi);
+      if(distToLow <= distToHigh){ setRange(midi, settings.highMidi, { fromClick: true }); }
+      else{ setRange(settings.lowMidi, midi, { fromClick: true }); }
+    });
+
+    previewWrap.appendChild(svg);
+  }
+
+  function openModal(){ modalBackdrop.classList.add('open'); renderRangePreview(); }
+  function closeModal(){ modalBackdrop.classList.remove('open'); }
+  settingsBtn.addEventListener('click', openModal);
+  modalDone.addEventListener('click', closeModal);
+  modalBackdrop.addEventListener('click', (e)=>{ if(e.target === modalBackdrop) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+
+  // Initial render
+  populateNoteSelects();
+  renderRangePreview();
+  nextNote();
+})();
+</script>
+</body>
+</html>
