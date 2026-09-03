@@ -506,8 +506,6 @@
   };
 
   const DURATION_BEATS = { 'q': 1, 'h': 2, 'w': 4 };
-
-  const SILENCE_RMS = 0.005; // sensitive to piano decay on iPad
   const INCORRECT_HOLD_MS = 120;
   const CORRECT_HOLD_MS = 60;
   const ADVANCE_DELAY_MS = 750;
@@ -774,14 +772,14 @@
     nextNote();
   });
 
-  let audioCtx, analyser, mediaStream, rafId;
+  let audioCtx, analyser, gainNode, mediaStream, rafId;
   let listening = false;
   let matchStartTime = null;
   let lastGoodTime = null;
   let incorrectStartTime = null;
   let lastDetectedMidi = null;
 
-  // --- High-precision difference function pitch detector (YIN-derived) ---
+  // --- Optimized Normalized Pitch Engine (Tuned for iPad Safari) ---
   function detectPitch(buffer, sampleRate) {
     const SIZE = buffer.length;
     let sumSquares = 0;
@@ -789,11 +787,13 @@
       sumSquares += buffer[i] * buffer[i];
     }
     const rms = Math.sqrt(sumSquares / SIZE);
-    if (rms < SILENCE_RMS) return null;
+    
+    // Lower silence floor to account for Apple AGC clamping
+    if (rms < 0.003) return null;
 
-    // Search between 65 Hz (C2) and 1200 Hz (D6)
+    // Pitch search range: 60 Hz to 1200 Hz
     const minPeriod = Math.floor(sampleRate / 1200);
-    const maxPeriod = Math.min(Math.floor(sampleRate / 65), Math.floor(SIZE / 2));
+    const maxPeriod = Math.min(Math.floor(sampleRate / 60), Math.floor(SIZE / 2));
 
     const diff = new Float32Array(maxPeriod);
     for (let tau = minPeriod; tau < maxPeriod; tau++) {
@@ -805,7 +805,6 @@
       diff[tau] = delta;
     }
 
-    // Cumulative mean normalized difference
     const cmnd = new Float32Array(maxPeriod);
     cmnd[0] = 1;
     let runningSum = 0;
@@ -814,8 +813,8 @@
       cmnd[tau] = (runningSum > 0) ? (diff[tau] * tau) / runningSum : 1;
     }
 
-    // Peak threshold (0.20 permits realistic piano string harmonics)
-    const threshold = 0.20;
+    // Relaxed threshold (0.35) so iPad microphone overtones don't cause false rejections
+    const threshold = 0.35;
     let tauEstimate = -1;
     for (let tau = minPeriod; tau < maxPeriod; tau++) {
       if (cmnd[tau] < threshold) {
@@ -827,7 +826,6 @@
       }
     }
 
-    // If strictly below threshold was not found, pick the global minimum
     if (tauEstimate === -1) {
       let minVal = 999999;
       for (let tau = minPeriod; tau < maxPeriod; tau++) {
@@ -836,10 +834,9 @@
           tauEstimate = tau;
         }
       }
-      if (minVal > 0.40) return null; // Reject non-musical noise
+      if (minVal > 0.45) return null;
     }
 
-    // Parabolic interpolation for sub-bin frequency accuracy
     let finalTau = tauEstimate;
     if (tauEstimate > 0 && tauEstimate < maxPeriod - 1) {
       const s0 = cmnd[tauEstimate - 1];
@@ -889,7 +886,6 @@
       const detMidi = freqToMidi(freq);
       const detRounded = Math.round(detMidi);
       
-      // Live display: show note and Hz immediately
       detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
 
       if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.5){
@@ -966,11 +962,19 @@
     }
 
     try{
+      // Explicit WebKit & iOS constraints: Bypass speech processing / DSP filters
+      const webkitAudioConstraints = {
+        audio: {
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false }
+        }
+      };
+
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
-          echoCancellation: false, noiseSuppression: false, autoGainControl: false
-        }});
+        mediaStream = await navigator.mediaDevices.getUserMedia(webkitAudioConstraints);
       } catch(e) {
+        // Fallback if specific WebKit keys are rejected
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
     } catch(err){
@@ -988,16 +992,23 @@
 
     audioCtx = new AudioContextClass();
     
+    // Explicitly un-pause suspended context on iOS
     if (audioCtx.state === 'suspended') {
       await audioCtx.resume();
     }
 
     const source = audioCtx.createMediaStreamSource(mediaStream);
-    analyser = audioCtx.createAnalyser();
     
-    // Increased to 4096 to properly capture lower registers at 48kHz
+    // Add software Pre-Amp Gain to compensate for iOS mic dampening
+    gainNode = audioCtx.createGain();
+    gainNode.gain.setValueAtTime(3.0, audioCtx.currentTime); // 3x digital pre-amp
+
+    analyser = audioCtx.createAnalyser();
     analyser.fftSize = 4096;
-    source.connect(analyser);
+
+    // Pipe stream: Source -> PreAmp -> Analyser
+    source.connect(gainNode);
+    gainNode.connect(analyser);
 
     listening = true;
     isAdvancing = false;
