@@ -466,11 +466,7 @@
     const octave = Math.floor(midi / 12) - 1;
     const opts = SPELLINGS[semi];
     const choice = (opts.length > 1 && preferFlat) ? opts[1] : opts[0];
-    return {
-      letter: choice.letter,
-      acc: choice.acc,
-      octave: octave
-    };
+    return { letter: choice.letter, acc: choice.acc, octave: octave };
   }
 
   function midiToName(midi, preferFlat = false){
@@ -504,21 +500,22 @@
     highMidi: 81,
     toleranceCents: 50,
     holdMs: 60,
-    graceMs: 120,
+    graceMs: 140,
     includeAccidentals: false,
     durations: ['q']
   };
 
   const DURATION_BEATS = { 'q': 1, 'h': 2, 'w': 4 };
-  const SILENCE_RMS = 0.018;
-  const MIN_PITCH_CONFIDENCE = 0.72;
-  const INCORRECT_HOLD_MS = 90;
+
+  // Adjusted for iPad microphone input sensitivity
+  const SILENCE_RMS = 0.006; 
+  const MIN_PITCH_CONFIDENCE = 0.58;
+  const INCORRECT_HOLD_MS = 100;
   const CORRECT_HOLD_MS = 60;
   const ADVANCE_DELAY_MS = 750;
 
   const wrap = document.getElementById('staff-wrap');
 
-  // Fallback standalone SVG renderer when VexFlow CDN is blocked (e.g. Files app preview)
   function drawPureSvgStaff(midi, clef, duration, preferFlat){
     wrap.innerHTML = '';
     const svgNS = "http://www.w3.org/2000/svg";
@@ -531,7 +528,6 @@
     const bY = 160;
     const spacing = 10;
 
-    // Draw treble staff lines
     for(let i=0; i<5; i++){
       const l = document.createElementNS(svgNS, 'line');
       l.setAttribute('x1', 40); l.setAttribute('x2', 340);
@@ -539,7 +535,6 @@
       l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.2');
       svg.appendChild(l);
     }
-    // Draw bass staff lines
     for(let i=0; i<5; i++){
       const l = document.createElementNS(svgNS, 'line');
       l.setAttribute('x1', 40); l.setAttribute('x2', 340);
@@ -548,14 +543,12 @@
       svg.appendChild(l);
     }
 
-    // Connectors
     const leftBar = document.createElementNS(svgNS, 'line');
     leftBar.setAttribute('x1', 40); leftBar.setAttribute('x2', 40);
     leftBar.setAttribute('y1', tY); leftBar.setAttribute('y2', bY + 40);
     leftBar.setAttribute('stroke', '#2A2E35'); leftBar.setAttribute('stroke-width', '2');
     svg.appendChild(leftBar);
 
-    // Clef Text Markers
     const tClef = document.createElementNS(svgNS, 'text');
     tClef.setAttribute('x', 50); tClef.setAttribute('y', tY + 28);
     tClef.setAttribute('font-size', '28'); tClef.setAttribute('font-family', 'Georgia, serif');
@@ -568,17 +561,15 @@
     bClef.setAttribute('fill', '#2A2E35'); bClef.textContent = '𝄢';
     svg.appendChild(bClef);
 
-    // Note placement calculation
     const sp = midiToSpelling(midi, preferFlat);
     const dia = diatonicIndexFromSpelling(sp.letter, sp.octave);
     const isTreble = clef === 'treble';
     const baseDia = isTreble ? TREBLE_BOTTOM_DIA : BASS_BOTTOM_DIA;
     const topDia  = isTreble ? TREBLE_TOP_DIA : BASS_TOP_DIA;
-    const baseLineY = (isTreble ? tY : bY) + 40; // bottom line (line 4)
+    const baseLineY = (isTreble ? tY : bY) + 40;
     const noteY = baseLineY - (dia - baseDia) * (spacing / 2);
     const noteX = 190;
 
-    // Ledger lines
     if (dia > topDia) {
       for (let l = topDia + 2; l <= dia; l += 2) {
         const ly = baseLineY - (l - baseDia) * (spacing / 2);
@@ -602,7 +593,6 @@
     const noteGroup = document.createElementNS(svgNS, 'g');
     noteGroup.setAttribute('id', 'target-note');
 
-    // Notehead
     const head = document.createElementNS(svgNS, 'ellipse');
     head.setAttribute('cx', noteX); head.setAttribute('cy', noteY);
     head.setAttribute('rx', 6.5); head.setAttribute('ry', 4.8);
@@ -618,7 +608,6 @@
     }
     noteGroup.appendChild(head);
 
-    // Stem
     if(duration !== 'w'){
       const stem = document.createElementNS(svgNS, 'line');
       const stemUp = dia < (baseDia + 4);
@@ -631,7 +620,6 @@
       noteGroup.appendChild(stem);
     }
 
-    // Accidental
     if(sp.acc){
       const acc = document.createElementNS(svgNS, 'text');
       acc.setAttribute('x', noteX - 18);
@@ -798,22 +786,31 @@
   function autoCorrelate(buf, sampleRate){
     const SIZE = buf.length;
     let rms = 0;
-    for(let i=0;i<SIZE;i++){ rms += buf[i]*buf[i]; }
+    for(let i=0; i<SIZE; i++){ rms += buf[i]*buf[i]; }
     rms = Math.sqrt(rms/SIZE);
-    if(rms < SILENCE_RMS) return -1;
+
+    const detectedEl = document.getElementById('detected');
+
+    // If level is too low, show live RMS so user knows mic is receiving data
+    if(rms < SILENCE_RMS) {
+      if(detectedEl && listening){
+        detectedEl.textContent = `Mic active (level: ${(rms * 1000).toFixed(0)})`;
+      }
+      return -1;
+    }
 
     let r1 = 0, r2 = SIZE-1;
     const thres = 0.2;
-    for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i]) < thres){ r1 = i; break; } }
-    for(let i=1;i<SIZE/2;i++){ if(Math.abs(buf[SIZE-i]) < thres){ r2 = SIZE-i; break; } }
+    for(let i=0; i<SIZE/2; i++){ if(Math.abs(buf[i]) < thres){ r1 = i; break; } }
+    for(let i=1; i<SIZE/2; i++){ if(Math.abs(buf[SIZE-i]) < thres){ r2 = SIZE-i; break; } }
     const trimmed = buf.slice(r1, r2);
     const n = trimmed.length;
     if(n < 8) return -1;
 
     const c = new Float32Array(n);
-    for(let i=0;i<n;i++){
+    for(let i=0; i<n; i++){
       let sum = 0;
-      for(let j=0;j<n-i;j++){ sum += trimmed[j]*trimmed[j+i]; }
+      for(let j=0; j<n-i; j++){ sum += trimmed[j]*trimmed[j+i]; }
       c[i] = sum;
     }
 
@@ -821,7 +818,7 @@
     while(d < n-1 && c[d] > c[d+1]) d++;
 
     let maxVal = -1, maxPos = -1;
-    for(let i=d;i<n;i++){ if(c[i] > maxVal){ maxVal = c[i]; maxPos = i; } }
+    for(let i=d; i<n; i++){ if(c[i] > maxVal){ maxVal = c[i]; maxPos = i; } }
     let T0 = maxPos;
     if(T0 <= 0) return -1;
 
@@ -836,7 +833,7 @@
     const confidence = c[T0] / (c[0] || 1);
     if(confidence < MIN_PITCH_CONFIDENCE) return -1;
 
-    return { freq: sampleRate / T0, confidence };
+    return { freq: sampleRate / T0, confidence, rms };
   }
 
   function freqToMidi(f){ return 69 + 12*Math.log2(f/440); }
@@ -856,7 +853,6 @@
     const now = performance.now();
 
     if(result === -1){
-      detectedEl.textContent = '\u00A0';
       incorrectStartTime = null;
       lastDetectedMidi = null;
 
@@ -875,7 +871,7 @@
       const detRounded = Math.round(detMidi);
       detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
 
-      if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.35){
+      if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.4){
         incorrectStartTime = null;
       }
       lastDetectedMidi = detMidi;
@@ -943,15 +939,20 @@
     errEl.style.display = 'none';
 
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      errEl.textContent = 'Microphone access is not supported in this preview. Open in Safari or via HTTP/HTTPS.';
+      errEl.textContent = 'Microphone access is not supported. Please open this page in Safari.';
       errEl.style.display = 'block';
       return false;
     }
 
     try{
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false
-      }});
+      // Try unconstrained capture first, fallback to true if device rejects
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
+          echoCancellation: false, noiseSuppression: false, autoGainControl: false
+        }});
+      } catch(e) {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
     } catch(err){
       errEl.textContent = 'Could not access the microphone: ' + err.message;
       errEl.style.display = 'block';
@@ -960,16 +961,23 @@
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if(!AudioContextClass){
-      errEl.textContent = 'AudioContext is not supported in this preview environment.';
+      errEl.textContent = 'AudioContext is not supported on this browser.';
       errEl.style.display = 'block';
       return false;
     }
 
     audioCtx = new AudioContextClass();
+    
+    // Crucial for iPad Safari: explicitly resume suspended AudioContext
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+
     const source = audioCtx.createMediaStreamSource(mediaStream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
     source.connect(analyser);
+
     listening = true;
     isAdvancing = false;
     matchStartTime = null; lastGoodTime = null;
@@ -1101,7 +1109,7 @@
   function resetAdvancedSettings(){
     settings.toleranceCents = 50;
     settings.holdMs = 60;
-    settings.graceMs = 120;
+    settings.graceMs = 140;
     toleranceSlider.value = settings.toleranceCents;
     holdSlider.value = settings.holdMs;
     graceSlider.value = settings.graceMs;
@@ -1113,7 +1121,6 @@
   }
   resetAdvanced.addEventListener('click', resetAdvancedSettings);
 
-  // Range preview (pure SVG for total reliability)
   const previewWrap = document.getElementById('rangePreviewWrap');
   const PREVIEW_SPACING = 10;
 
@@ -1129,7 +1136,6 @@
     const bY = 135;
     const spacing = PREVIEW_SPACING;
 
-    // Treble lines
     for(let i=0; i<5; i++){
       const l = document.createElementNS(svgNS, 'line');
       l.setAttribute('x1', 40); l.setAttribute('x2', 300);
@@ -1137,7 +1143,6 @@
       l.setAttribute('stroke', '#2A2E35'); l.setAttribute('stroke-width', '1.1');
       svg.appendChild(l);
     }
-    // Bass lines
     for(let i=0; i<5; i++){
       const l = document.createElementNS(svgNS, 'line');
       l.setAttribute('x1', 40); l.setAttribute('x2', 300);
@@ -1146,7 +1151,6 @@
       svg.appendChild(l);
     }
 
-    // Connectors
     const bar = document.createElementNS(svgNS, 'line');
     bar.setAttribute('x1', 40); bar.setAttribute('x2', 40);
     bar.setAttribute('y1', tY); bar.setAttribute('y2', bY + 40);
@@ -1254,7 +1258,6 @@
   modalBackdrop.addEventListener('click', (e)=>{ if(e.target === modalBackdrop) closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
 
-  // Initial render
   populateNoteSelects();
   renderRangePreview();
   nextNote();
