@@ -412,8 +412,8 @@
           </div>
 
           <div class="field" style="margin-bottom:0;">
-            <label>Dropout grace <span class="val" id="graceVal">120 ms</span></label>
-            <input type="range" id="graceSlider" min="0" max="400" step="20" value="120">
+            <label>Dropout grace <span class="val" id="graceVal">140 ms</span></label>
+            <input type="range" id="graceSlider" min="0" max="400" step="20" value="140">
           </div>
 
           <div class="modal-actions">
@@ -507,10 +507,8 @@
 
   const DURATION_BEATS = { 'q': 1, 'h': 2, 'w': 4 };
 
-  // Adjusted for iPad microphone input sensitivity
-  const SILENCE_RMS = 0.006; 
-  const MIN_PITCH_CONFIDENCE = 0.58;
-  const INCORRECT_HOLD_MS = 100;
+  const SILENCE_RMS = 0.005; // sensitive to piano decay on iPad
+  const INCORRECT_HOLD_MS = 120;
   const CORRECT_HOLD_MS = 60;
   const ADVANCE_DELAY_MS = 750;
 
@@ -783,60 +781,81 @@
   let incorrectStartTime = null;
   let lastDetectedMidi = null;
 
-  function autoCorrelate(buf, sampleRate){
-    const SIZE = buf.length;
-    let rms = 0;
-    for(let i=0; i<SIZE; i++){ rms += buf[i]*buf[i]; }
-    rms = Math.sqrt(rms/SIZE);
+  // --- High-precision difference function pitch detector (YIN-derived) ---
+  function detectPitch(buffer, sampleRate) {
+    const SIZE = buffer.length;
+    let sumSquares = 0;
+    for (let i = 0; i < SIZE; i++) {
+      sumSquares += buffer[i] * buffer[i];
+    }
+    const rms = Math.sqrt(sumSquares / SIZE);
+    if (rms < SILENCE_RMS) return null;
 
-    const detectedEl = document.getElementById('detected');
+    // Search between 65 Hz (C2) and 1200 Hz (D6)
+    const minPeriod = Math.floor(sampleRate / 1200);
+    const maxPeriod = Math.min(Math.floor(sampleRate / 65), Math.floor(SIZE / 2));
 
-    // If level is too low, show live RMS so user knows mic is receiving data
-    if(rms < SILENCE_RMS) {
-      if(detectedEl && listening){
-        detectedEl.textContent = `Mic active (level: ${(rms * 1000).toFixed(0)})`;
+    const diff = new Float32Array(maxPeriod);
+    for (let tau = minPeriod; tau < maxPeriod; tau++) {
+      let delta = 0;
+      for (let i = 0; i < maxPeriod; i++) {
+        const val = buffer[i] - buffer[i + tau];
+        delta += val * val;
       }
-      return -1;
+      diff[tau] = delta;
     }
 
-    let r1 = 0, r2 = SIZE-1;
-    const thres = 0.2;
-    for(let i=0; i<SIZE/2; i++){ if(Math.abs(buf[i]) < thres){ r1 = i; break; } }
-    for(let i=1; i<SIZE/2; i++){ if(Math.abs(buf[SIZE-i]) < thres){ r2 = SIZE-i; break; } }
-    const trimmed = buf.slice(r1, r2);
-    const n = trimmed.length;
-    if(n < 8) return -1;
-
-    const c = new Float32Array(n);
-    for(let i=0; i<n; i++){
-      let sum = 0;
-      for(let j=0; j<n-i; j++){ sum += trimmed[j]*trimmed[j+i]; }
-      c[i] = sum;
+    // Cumulative mean normalized difference
+    const cmnd = new Float32Array(maxPeriod);
+    cmnd[0] = 1;
+    let runningSum = 0;
+    for (let tau = 1; tau < maxPeriod; tau++) {
+      runningSum += diff[tau];
+      cmnd[tau] = (runningSum > 0) ? (diff[tau] * tau) / runningSum : 1;
     }
 
-    let d = 0;
-    while(d < n-1 && c[d] > c[d+1]) d++;
-
-    let maxVal = -1, maxPos = -1;
-    for(let i=d; i<n; i++){ if(c[i] > maxVal){ maxVal = c[i]; maxPos = i; } }
-    let T0 = maxPos;
-    if(T0 <= 0) return -1;
-
-    if(T0 > 0 && T0 < n-1){
-      const x1 = c[T0-1], x2 = c[T0], x3 = c[T0+1];
-      const a = (x1 + x3 - 2*x2) / 2;
-      const b = (x3 - x1) / 2;
-      if(a !== 0) T0 = T0 - b/(2*a);
+    // Peak threshold (0.20 permits realistic piano string harmonics)
+    const threshold = 0.20;
+    let tauEstimate = -1;
+    for (let tau = minPeriod; tau < maxPeriod; tau++) {
+      if (cmnd[tau] < threshold) {
+        while (tau + 1 < maxPeriod && cmnd[tau + 1] < cmnd[tau]) {
+          tau++;
+        }
+        tauEstimate = tau;
+        break;
+      }
     }
-    if(T0 <= 0) return -1;
 
-    const confidence = c[T0] / (c[0] || 1);
-    if(confidence < MIN_PITCH_CONFIDENCE) return -1;
+    // If strictly below threshold was not found, pick the global minimum
+    if (tauEstimate === -1) {
+      let minVal = 999999;
+      for (let tau = minPeriod; tau < maxPeriod; tau++) {
+        if (cmnd[tau] < minVal) {
+          minVal = cmnd[tau];
+          tauEstimate = tau;
+        }
+      }
+      if (minVal > 0.40) return null; // Reject non-musical noise
+    }
 
-    return { freq: sampleRate / T0, confidence, rms };
+    // Parabolic interpolation for sub-bin frequency accuracy
+    let finalTau = tauEstimate;
+    if (tauEstimate > 0 && tauEstimate < maxPeriod - 1) {
+      const s0 = cmnd[tauEstimate - 1];
+      const s1 = cmnd[tauEstimate];
+      const s2 = cmnd[tauEstimate + 1];
+      const bottom = 2 * (2 * s1 - s2 - s0);
+      if (bottom !== 0) {
+        finalTau = tauEstimate + (s0 - s2) / bottom;
+      }
+    }
+
+    const freq = sampleRate / finalTau;
+    return { freq, rms };
   }
 
-  function freqToMidi(f){ return 69 + 12*Math.log2(f/440); }
+  function freqToMidi(f){ return 69 + 12 * Math.log2(f / 440); }
 
   function pollPitch(){
     if(!listening) return;
@@ -848,11 +867,11 @@
 
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
-    const result = autoCorrelate(buf, audioCtx.sampleRate);
+    const result = detectPitch(buf, audioCtx.sampleRate);
     const detectedEl = document.getElementById('detected');
     const now = performance.now();
 
-    if(result === -1){
+    if(!result){
       incorrectStartTime = null;
       lastDetectedMidi = null;
 
@@ -869,9 +888,11 @@
       const freq = result.freq;
       const detMidi = freqToMidi(freq);
       const detRounded = Math.round(detMidi);
+      
+      // Live display: show note and Hz immediately
       detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
 
-      if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.4){
+      if(lastDetectedMidi !== null && Math.abs(detMidi - lastDetectedMidi) > 0.5){
         incorrectStartTime = null;
       }
       lastDetectedMidi = detMidi;
@@ -945,7 +966,6 @@
     }
 
     try{
-      // Try unconstrained capture first, fallback to true if device rejects
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
           echoCancellation: false, noiseSuppression: false, autoGainControl: false
@@ -968,14 +988,15 @@
 
     audioCtx = new AudioContextClass();
     
-    // Crucial for iPad Safari: explicitly resume suspended AudioContext
     if (audioCtx.state === 'suspended') {
       await audioCtx.resume();
     }
 
     const source = audioCtx.createMediaStreamSource(mediaStream);
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
+    
+    // Increased to 4096 to properly capture lower registers at 48kHz
+    analyser.fftSize = 4096;
     source.connect(analyser);
 
     listening = true;
