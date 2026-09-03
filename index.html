@@ -510,7 +510,7 @@
     graceMs: 140,
     includeAccidentals: false,
     durations: ['q'],
-    showPitchReadout: false // off by default
+    showPitchReadout: false
   };
 
   const DURATION_BEATS = { 'q': 1, 'h': 2, 'w': 4 };
@@ -520,7 +520,6 @@
 
   const wrap = document.getElementById('staff-wrap');
 
-  // Fallback standalone SVG renderer when VexFlow is blocked
   function drawPureSvgStaff(midi, clef, duration, preferFlat){
     wrap.innerHTML = '';
     const svgNS = "http://www.w3.org/2000/svg";
@@ -640,7 +639,6 @@
     wrap.appendChild(svg);
   }
 
-  // Slightly larger VexFlow Grand Staff
   function drawGrandStaff(midi, clef, duration = 'q', preferFlat = false){
     if(!VF){
       drawPureSvgStaff(midi, clef, duration, preferFlat);
@@ -650,12 +648,10 @@
     try {
       wrap.innerHTML = '';
       const renderer = new VF.Renderer(wrap, VF.Renderer.Backends.SVG);
-      // Increased from 380x290 to 430x315
       renderer.resize(430, 315);
       const context = renderer.getContext();
       context.setFont('Georgia', 11);
 
-      // Width expanded from 290 to 340
       const staveTreble = new VF.Stave(45, 25, 340);
       staveTreble.addClef('treble');
       const staveBass = new VF.Stave(45, 160, 340);
@@ -799,10 +795,12 @@
     }
     const rms = Math.sqrt(sumSquares / SIZE);
     
-    if (rms < 0.003) return null;
+    // Lowered threshold to pick up quiet decays
+    if (rms < 0.001) return null;
 
-    const minPeriod = Math.floor(sampleRate / 1200);
-    const maxPeriod = Math.min(Math.floor(sampleRate / 60), Math.floor(SIZE / 2));
+    // Raised upper bound to 2100 Hz to accurately encompass G5 (~784 Hz) and higher octaves
+    const minPeriod = Math.max(2, Math.floor(sampleRate / 2100));
+    const maxPeriod = Math.min(Math.floor(sampleRate / 55), Math.floor(SIZE / 2));
 
     const diff = new Float32Array(maxPeriod);
     for (let tau = minPeriod; tau < maxPeriod; tau++) {
@@ -822,7 +820,7 @@
       cmnd[tau] = (runningSum > 0) ? (diff[tau] * tau) / runningSum : 1;
     }
 
-    const threshold = 0.35;
+    const threshold = 0.20;
     let tauEstimate = -1;
     for (let tau = minPeriod; tau < maxPeriod; tau++) {
       if (cmnd[tau] < threshold) {
@@ -842,16 +840,16 @@
           tauEstimate = tau;
         }
       }
-      if (minVal > 0.45) return null;
+      if (minVal > 0.55) return null;
     }
 
     let finalTau = tauEstimate;
-    if (tauEstimate > 0 && tauEstimate < maxPeriod - 1) {
+    if (tauEstimate > minPeriod && tauEstimate < maxPeriod - 1) {
       const s0 = cmnd[tauEstimate - 1];
       const s1 = cmnd[tauEstimate];
       const s2 = cmnd[tauEstimate + 1];
       const bottom = 2 * (2 * s1 - s2 - s0);
-      if (bottom !== 0) {
+      if (Math.abs(bottom) > 1e-6) {
         finalTau = tauEstimate + (s0 - s2) / bottom;
       }
     }
@@ -898,7 +896,6 @@
       const detMidi = freqToMidi(freq);
       const detRounded = Math.round(detMidi);
       
-      // Only display frequency and note if the setting is checked
       if(settings.showPitchReadout){
         detectedEl.textContent = `${midiToName(detRounded, currentPreferFlat)}  \u00B7  ${freq.toFixed(1)} Hz`;
       } else {
@@ -979,16 +976,18 @@
     }
 
     try{
-      const webkitAudioConstraints = {
+      const audioConstraints = {
         audio: {
-          echoCancellation: { ideal: false },
-          noiseSuppression: { ideal: false },
-          autoGainControl: { ideal: false }
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1,
+          latency: 0
         }
       };
 
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia(webkitAudioConstraints);
+        mediaStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
       } catch(e) {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
@@ -1014,10 +1013,10 @@
     const source = audioCtx.createMediaStreamSource(mediaStream);
     
     gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(3.0, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(6.0, audioCtx.currentTime);
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 4096;
+    analyser.fftSize = 2048;
 
     source.connect(gainNode);
     gainNode.connect(analyser);
