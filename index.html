@@ -614,7 +614,8 @@
 
     if(duration !== 'w'){
       const stem = document.createElementNS(svgNS, 'line');
-      const stemUp = dia < (baseDia + 4);
+      const middleLineDia = baseDia + 4; // Middle line is 4 steps above the bottom line
+      const stemUp = dia < middleLineDia;
       const sx = stemUp ? noteX + 6.5 : noteX - 6.5;
       const sy1 = noteY;
       const sy2 = stemUp ? noteY - 35 : noteY + 35;
@@ -673,7 +674,13 @@
 
       const sp = midiToSpelling(midi, preferFlat);
       const vexKey = `${sp.letter}/${sp.octave}`;
-      const note = new VF.StaveNote({ clef, keys: [vexKey], duration: duration });
+      
+      const baseDia = clef === 'treble' ? TREBLE_BOTTOM_DIA : BASS_BOTTOM_DIA;
+      const dia = diatonicIndexFromSpelling(sp.letter, sp.octave);
+      const middleLineDia = baseDia + 4;
+      const stemDirection = dia >= middleLineDia ? -1 : 1;
+
+      const note = new VF.StaveNote({ clef, keys: [vexKey], duration: duration, stem_direction: stemDirection });
       if(sp.acc){
         note.addAccidental(0, new VF.Accidental(sp.acc));
       }
@@ -795,10 +802,8 @@
     }
     const rms = Math.sqrt(sumSquares / SIZE);
     
-    // Lowered threshold to pick up quiet decays
     if (rms < 0.001) return null;
 
-    // Raised upper bound to 2100 Hz to accurately encompass G5 (~784 Hz) and higher octaves
     const minPeriod = Math.max(2, Math.floor(sampleRate / 2100));
     const maxPeriod = Math.min(Math.floor(sampleRate / 55), Math.floor(SIZE / 2));
 
